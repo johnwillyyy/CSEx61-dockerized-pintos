@@ -41,6 +41,8 @@ struct sleeping_thread
   struct list_elem elem;    // for inserting into sleep_list
 };
 
+
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -206,6 +208,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
     // free(st);
   }
   intr_set_level (old_level);
+
+  if(ticks%TIMER_FREQ){
+
+  }
 }
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

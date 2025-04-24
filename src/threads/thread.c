@@ -84,6 +84,40 @@ static tid_t allocate_tid (void);
 
    It is not safe to call thread_current() until this function
    finishes. */
+
+bool priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->effective_priority > thread_b->effective_priority;
+}
+
+void donate_priority(void){
+ // depth ==8
+ //thread current 
+ //liha waiting lock
+ // check lock_holder
+ // lock_holder's priority < current  => donate (lock_holder'priority = current priority)
+ /* if (lock holder waiting lock) == NULL break while 
+    change lock holder-> waiting lock == new lock
+    depth --
+ */ 
+  int depth =8;
+  struct lock *new_lock;
+  new_lock=thread_current()->waiting_for;
+  while (depth>0)
+  {
+    if(new_lock->holder->effective_priority < thread_current()->effective_priority){
+      new_lock->holder->effective_priority = thread_current()->effective_priority;
+    }
+    if(new_lock->holder->waiting_for == NULL){
+      break;
+    }else{
+      new_lock = new_lock->holder->waiting_for;
+    }
+    depth --;
+  }
+}
+  
 void
 thread_init (void) 
 {
@@ -201,6 +235,12 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if (!intr_context() && thread_current() != idle_thread && thread_current()->effective_priority < t->effective_priority)  //2304 checking interrupt handler
+  {    
+  thread_yield();
+  }
+ // intr_set_level (old_level);
+
   return tid;
 }
 
@@ -237,8 +277,13 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  //list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, priority_compare ,NULL);
   t->status = THREAD_READY;
+  if (!intr_context() && thread_current() != idle_thread && thread_current()->effective_priority < t->effective_priority)  
+  {    
+  thread_yield();
+  }
   intr_set_level (old_level);
 }
 
@@ -308,7 +353,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    //list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, priority_compare ,NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -336,13 +382,21 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  if(thread_current ()->effective_priority < new_priority){
+    thread_current ()->effective_priority = new_priority;
+    thread_yield;
+  }
+  thread_current ()->effective_priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  enum intr_level old_level = intr_disable();  
+  int pr = thread_current()->effective_priority;
+  intr_set_level(old_level);   
+  return pr;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -462,6 +516,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->effective_priority = priority;
+  list_init (&t->holding_locks);
+  lock_init(&t->waiting_for);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -488,7 +545,7 @@ alloc_frame (struct thread *t, size_t size)
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
 static struct thread *
-next_thread_to_run (void) 
+next_thread_to_run (void)    /// if thread_mlfqs
 {
   if (list_empty (&ready_list))
     return idle_thread;

@@ -68,7 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_push_back (&sema->waiters, &thread_current ()->elem); //option2: list_insert_order
       thread_block ();
     }
   sema->value--;
@@ -113,9 +113,11 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
+  if (!list_empty (&sema->waiters)) {
+    list_sort (&sema->waiters,priority_compare,NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+  }
   sema->value++;
   intr_set_level (old_level);
 }
@@ -195,9 +197,18 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
+  /*lock_holder && lock->holder < thread_current-> effective  => thread current->waiting_for = lock
+  donate priority()
+  */
+ if(lock->holder && lock->holder->effective_priority < thread_current()->effective_priority){
+  thread_current()->waiting_for = lock;
+  donate_priority();
+ }
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  thread_current()->waiting_for = NULL;
+  list_push_back(&thread_current()->holding_locks, &lock->elem);
+  //if lock is available => waiting_for = NUll and push it to list of hold locks
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -230,9 +241,26 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
+  enum intr_level old_level = intr_disable();
+  /* remove this lock from thread'hold list
+  lock->holder = null
+  thread_current effective priority = priority
+  thread yield()
+  */
+  struct list_elem *e;
+  for (e = list_begin (&thread_current()->holding_locks); e != list_end (&thread_current()->holding_locks); e = list_remove (e))
+  {
+    struct lock *held_lock = list_entry (e, struct lock, elem);
+      if (held_lock == lock) {
+        list_remove(e);
+        break;
+      }
+  }
   lock->holder = NULL;
+  thread_current()->effective_priority = thread_current()->priority;
   sema_up (&lock->semaphore);
+  thread_yield();
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false

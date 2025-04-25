@@ -92,19 +92,20 @@ bool priority_compare(const struct list_elem *a, const struct list_elem *b, void
 }
 
 void donate_priority(void){
- // depth ==8
- //thread current 
- //liha waiting lock
- // check lock_holder
- // lock_holder's priority < current  => donate (lock_holder'priority = current priority)
- /* if (lock holder waiting lock) == NULL break while 
-    change lock holder-> waiting lock == new lock
-    depth --
+ /*
+ depth ==8
+ thread current 
+ has waiting lock
+ check lock_holder
+ lock_holder's priority < current  => donate (lock_holder'priority = current priority)
+ if (lock holder waiting lock) == NULL break while 
+ change lock holder-> waiting lock == new lock
+ depth --
  */ 
   int depth =8;
   struct lock *new_lock;
   new_lock=thread_current()->waiting_for;
-  while (depth>0)
+  while (depth>0 && new_lock !=NULL && new_lock->holder !=NULL)
   {
     if(new_lock->holder->effective_priority < thread_current()->effective_priority){
       new_lock->holder->effective_priority = thread_current()->effective_priority;
@@ -117,7 +118,25 @@ void donate_priority(void){
     depth --;
   }
 }
-  
+void update_priority(){
+  thread_current()->effective_priority = thread_current()->priority;
+  struct list_elem *e;
+  for (e = list_begin (&thread_current()->holding_locks); e != list_end (&thread_current()->holding_locks); e = list_remove (e))
+  {
+    struct lock *current_lock;
+    struct thread *max_waiter = list_entry(list_max(&current_lock->semaphore.waiters,priority_compare,NULL),struct thread,elem);
+    if (thread_current()->effective_priority <max_waiter->effective_priority)
+    {
+      thread_current()->effective_priority= max_waiter->effective_priority;
+    }
+    
+  }
+
+}
+  /*update_priority_on release function:
+  loop on hold locks for the current thread and find the maximum waiter for this lock
+  current_thread->effective_priority = waiter thread's priority 
+  */
 void
 thread_init (void) 
 {
@@ -377,17 +396,42 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+/*
+T1 P 10  
+Caro T1 P 5
+T1 P 10
+T1 10 
+Ready higher <10
+T1 
+
+T1 P 10  
+Caro T1 P 5
+T1 P 5
+Ready higher 
+thread_yield();
+*/
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level = intr_disable();
   thread_current ()->priority = new_priority;
-  if(thread_current ()->effective_priority < new_priority){
-    thread_current ()->effective_priority = new_priority;
-    thread_yield;
+  int old_effective_priority=thread_current()->effective_priority;
+  update_priority();
+ 
+  if(thread_current ()->effective_priority < old_effective_priority){
+    if (!list_empty(&ready_list))
+    {
+      struct thread *t=list_entry(list_front(&ready_list),struct thread,elem);
+      if(t->effective_priority > thread_current()->effective_priority){
+        thread_yield();
+    }
+    }
   }
-  thread_current ()->effective_priority = new_priority;
+  intr_set_level(old_level);
 }
+
 
 /* Returns the current thread's priority. */
 int

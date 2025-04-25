@@ -197,6 +197,7 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
+  enum intr_level old_level = intr_disable(); 
   /*lock_holder && lock->holder < thread_current-> effective  => thread current->waiting_for = lock
   donate priority()
   */
@@ -208,6 +209,7 @@ lock_acquire (struct lock *lock)
   lock->holder = thread_current ();
   thread_current()->waiting_for = NULL;
   list_push_back(&thread_current()->holding_locks, &lock->elem);
+  intr_set_level(old_level);  
   //if lock is available => waiting_for = NUll and push it to list of hold locks
 }
 
@@ -257,7 +259,8 @@ lock_release (struct lock *lock)
       }
   }
   lock->holder = NULL;
-  thread_current()->effective_priority = thread_current()->priority;
+  update_priority();
+  //thread_current()->effective_priority = thread_current()->priority;
   sema_up (&lock->semaphore);
   thread_yield();
   intr_set_level(old_level);

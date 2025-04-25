@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/mlfqs_updates.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -198,6 +199,10 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  t->nice = thread_current()->nice;
+  t->recent_cpu.value = thread_current()->recent_cpu.value;
+  update_thread_priority(t);
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -363,16 +368,14 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return real_to_nearst_int(load_avg.value * 100);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return real_to_nearst_int(thread_current()->recent_cpu.value * 100);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -489,6 +492,9 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+  if(thread_mlfqs){
+
+  }
   if (list_empty (&ready_list))
     return idle_thread;
   else

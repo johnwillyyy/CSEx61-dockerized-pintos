@@ -5,6 +5,9 @@
 #include <list.h>
 #include <stdint.h>
 #include "fixed-point.h"
+
+fixed_t load_avg;   /*estimates the average number of threads ready to run*/
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -88,7 +91,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    struct real recent_cpu;
+    fixed_t recent_cpu;
     int nice;
     struct list_elem allelem;           /* List element for all threads list. */
 

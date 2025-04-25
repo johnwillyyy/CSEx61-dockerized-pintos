@@ -87,6 +87,9 @@ main (void)
   argv = read_command_line ();
   argv = parse_options (argv);
 
+  /* initialize the load_avg to zero at booting*/
+  load_avg.value = 0;
+
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */
   thread_init ();

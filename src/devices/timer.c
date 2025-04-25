@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/mlfqs_updates.h"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -41,7 +42,8 @@ struct sleeping_thread
   struct list_elem elem;    // for inserting into sleep_list
 };
 
-
+/* keep track of the highest priority according to mlfqs */
+struct thread mlfqs_next_running;
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -209,8 +211,16 @@ timer_interrupt (struct intr_frame *args UNUSED)
   }
   intr_set_level (old_level);
 
-  if(ticks%TIMER_FREQ){
+  real_add_to_int(&thread_current()->recent_cpu, 1);
 
+  if(thread_mlfqs){
+    if(ticks % 4){
+      update_threads_priority();
+    }
+    if( ticks % TIMER_FREQ){
+      update_load_avg();
+      update_threads_recent_cpu();
+    }
   }
 }
 /* Returns true if LOOPS iterations waits for more than one timer

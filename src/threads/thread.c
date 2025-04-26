@@ -121,9 +121,9 @@ void donate_priority(void){
 void update_priority(){
   thread_current()->effective_priority = thread_current()->priority;
   struct list_elem *e;
-  for (e = list_begin (&thread_current()->holding_locks); e != list_end (&thread_current()->holding_locks); e = list_remove (e))
+  for (e = list_begin (&thread_current()->holding_locks); e != list_end (&thread_current()->holding_locks); e = list_next (e))
   {
-    struct lock *current_lock;
+    struct lock *current_lock= list_entry (e, struct lock, elem);
     struct thread *max_waiter = list_entry(list_max(&current_lock->semaphore.waiters,priority_compare,NULL),struct thread,elem);
     if (thread_current()->effective_priority <max_waiter->effective_priority)
     {
@@ -299,10 +299,6 @@ thread_unblock (struct thread *t)
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, priority_compare ,NULL);
   t->status = THREAD_READY;
-  if (!intr_context() && thread_current() != idle_thread && thread_current()->effective_priority < t->effective_priority)  
-  {    
-  thread_yield();
-  }
   intr_set_level (old_level);
 }
 

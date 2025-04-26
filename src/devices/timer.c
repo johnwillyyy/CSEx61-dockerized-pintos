@@ -211,17 +211,22 @@ timer_interrupt (struct intr_frame *args UNUSED)
   }
   intr_set_level (old_level);
 
-  real_add_to_int(&thread_current()->recent_cpu, 1);
+  if (thread_mlfqs) {
+    /* Increase recent_cpu by 1 for running thread (already done above) */
+    if(thread_current() != get_idle_thread())
+      thread_current()->recent_cpu = real_add_to_int(&thread_current()->recent_cpu, 1);
 
-  if(thread_mlfqs){
-    if(ticks % 4){
-      update_threads_priority();
-    }
-    if( ticks % TIMER_FREQ){
+    /* Every second (every TIMER_FREQ ticks = 100 ticks) */
+    if (ticks % TIMER_FREQ == 0) {
       update_load_avg();
       update_threads_recent_cpu();
     }
-  }
+
+    /* Every 4 ticks */
+    if (ticks % 4 == 0) {
+      update_threads_priority();
+    }
+}
 }
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

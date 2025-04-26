@@ -199,12 +199,11 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  t->nice = thread_current()->nice;
-  t->recent_cpu.value = thread_current()->recent_cpu.value;
-  update_thread_priority(t);
-
   /* Add to run queue. */
   thread_unblock (t);
+
+  if (thread_mlfqs && !intr_context() && thread_current() != idle_thread && thread_current()->priority < t->priority)
+    thread_yield();
 
   return tid;
 }
@@ -225,6 +224,12 @@ thread_block (void)
   schedule ();
 }
 
+bool mlfqs_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->priority > thread_b->priority;
+}
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -242,8 +247,18 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+
+  if(thread_mlfqs){
+    list_insert_ordered (&ready_list, &t->elem, mlfqs_comparator, NULL);
+  }else{
+    list_push_back (&ready_list, &t->elem);
+  }
+
   t->status = THREAD_READY;
+
+  if (thread_mlfqs && !intr_context() && thread_current() != idle_thread && thread_current()->priority < t->priority)
+    thread_yield();
+
   intr_set_level (old_level);
 }
 
@@ -312,8 +327,13 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread){
+    if(thread_mlfqs){
+      list_insert_ordered (&ready_list, &cur->elem, mlfqs_comparator, NULL);
+    }else{
+      list_push_back (&ready_list, &cur->elem);
+    }
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -334,6 +354,21 @@ thread_foreach (thread_action_func *func, void *aux)
       struct thread *t = list_entry (e, struct thread, allelem);
       func (t, aux);
     }
+}
+
+struct list *
+get_ready_threads(void){
+  return &ready_list;
+}
+
+struct thread *
+get_idle_thread(void){
+  return idle_thread;
+}
+
+struct list *
+get_all_threads(void){
+  return &all_list;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -465,6 +500,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->nice = 0;
+  t->recent_cpu.value = 0;
+
+  if (thread_mlfqs) {
+    t->nice = running_thread()->nice;
+    t->recent_cpu.value = running_thread()->recent_cpu.value;
+    update_thread_priority(t);
+  }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -492,9 +535,6 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if(thread_mlfqs){
-
-  }
   if (list_empty (&ready_list))
     return idle_thread;
   else

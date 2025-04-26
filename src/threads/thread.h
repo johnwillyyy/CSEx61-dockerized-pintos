@@ -143,4 +143,9 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+struct thread * get_idle_thread(void);
+struct list * get_ready_threads(void);
+struct list * get_all_threads(void);
+bool mlfqs_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
 #endif /* threads/thread.h */

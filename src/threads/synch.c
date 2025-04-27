@@ -31,6 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "mlfqs_updates.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -209,27 +210,43 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
-void
-lock_acquire (struct lock *lock)
-{
-  ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
-  ASSERT (!lock_held_by_current_thread (lock));
-  enum intr_level old_level = intr_disable(); 
-  /*lock_holder && lock->holder < thread_current-> effective  => thread current->waiting_for = lock
-  donate priority()
-  */
- if(lock->holder && lock->holder->effective_priority < thread_current()->effective_priority){
-  thread_current()->waiting_for = lock;
-  donate_priority();
- }
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
-  thread_current()->waiting_for = NULL;
-  list_push_back(&thread_current()->holding_locks, &lock->elem);
-  intr_set_level(old_level);  
-  //if lock is available => waiting_for = NUll and push it to list of hold locks
+   void lock_acquire (struct lock *lock) {
+    ASSERT (lock != NULL);
+    ASSERT (!intr_context ());
+    ASSERT (!lock_held_by_current_thread (lock));
+    
+    enum intr_level old_level = intr_disable(); 
+
+    // Priority donation logic (Always happens)
+    if (lock->holder && lock->holder->effective_priority < thread_current()->effective_priority) {
+        // If the current thread has a higher priority than the lock holder, donate priority
+        thread_current()->waiting_for = lock;
+        donate_priority();
+    }
+
+    // Wait on the lock's semaphore
+    sema_down(&lock->semaphore);
+
+    // Set the current thread as the new lock holder
+    lock->holder = thread_current();
+
+    // Handle MLFQS-specific logic (only when MLFQS is off)
+    if (!thread_mlfqs) {
+        // If MLFQS is not enabled, update the waiting_for field and hold the lock
+        thread_current()->waiting_for = NULL;
+        list_push_back(&thread_current()->holding_locks, &lock->elem);
+    }
+
+    // Update priority based on the recent_cpu value
+    if (thread_mlfqs) {
+        // If MLFQS is enabled, update recent_cpu decay and priority
+        thread_mlfqs_update_recent_cpu_for_thread(thread_current()) ;
+                thread_mlfqs_update_priority(thread_current());
+    }
+
+    intr_set_level(old_level);
 }
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -256,32 +273,38 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
-void
-lock_release (struct lock *lock) 
-{
-  ASSERT (lock != NULL);
-  ASSERT (lock_held_by_current_thread (lock));
-  enum intr_level old_level = intr_disable();
-  /* remove this lock from thread'hold list
-  lock->holder = null
-  thread_current effective priority = priority
-  thread yield()
-  */
-  struct list_elem *e;
-  for (e = list_begin (&thread_current()->holding_locks); e != list_end (&thread_current()->holding_locks); e = list_next (e))
-  {
-    struct lock *held_lock = list_entry (e, struct lock, elem);
-      if (held_lock == lock) {
-        list_remove(e);
-        break;
-      }
-  }
-  lock->holder = NULL;
-  update_priority();
-  //thread_current()->effective_priority = thread_current()->priority;
-  sema_up (&lock->semaphore);
-  thread_yield();
-  intr_set_level(old_level);
+   void lock_release (struct lock *lock) {
+    ASSERT (lock != NULL);
+    ASSERT (lock_held_by_current_thread (lock));
+    
+    enum intr_level old_level = intr_disable();
+
+    // Always update the priority and release the lock
+    update_priority();
+
+    // Signal the semaphore to unblock the next thread
+    sema_up(&lock->semaphore);
+
+    // Yield the CPU to another thread if necessary
+    thread_yield();
+
+    // Handle MLFQS-specific logic (only when MLFQS is off)
+    if (!thread_mlfqs) {
+        // Remove the lock from the thread's holding locks list if MLFQS is not enabled
+        struct list_elem *e;
+        for (e = list_begin(&thread_current()->holding_locks); e != list_end(&thread_current()->holding_locks); e = list_next(e)) {
+            struct lock *held_lock = list_entry(e, struct lock, elem);
+            if (held_lock == lock) {
+                list_remove(e);
+                break;
+            }
+        }
+    }
+
+    // Release the lock and reset the lock holder
+    lock->holder = NULL;
+
+    intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false

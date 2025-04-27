@@ -86,9 +86,8 @@ main (void)
   /* Break command line into arguments and parse options. */
   argv = read_command_line ();
   argv = parse_options (argv);
+  load_avg = FP_CONST(0);
 
-  /* initialize the load_avg to zero at booting*/
-  load_avg.value = 0;
 
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */

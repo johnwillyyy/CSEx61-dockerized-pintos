@@ -432,14 +432,12 @@ get_all_threads(void){
 void
 thread_set_priority (int new_priority) 
 {
-  enum intr_level old_level = intr_disable();
-  thread_current ()->priority = new_priority;
+  if (thread_mlfqs)
+  return;
 
-  if(thread_mlfqs){
-    update_thread_priority(thread_current ());
-    intr_set_level(old_level);
-    return;
-  }
+  enum intr_level old_level = intr_disable();
+  thread_current ()->priority = new_priority; 
+
   
   int old_effective_priority=thread_current()->effective_priority;
   update_priority();
@@ -461,9 +459,10 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  enum intr_level old_level = intr_disable();  
+  if(thread_mlfqs){
+    return;
+  } 
   int pr = thread_current()->effective_priority;
-  intr_set_level(old_level);   
   return pr;
 }
 
@@ -471,8 +470,9 @@ thread_get_priority (void)
 void
 thread_set_nice (int new_nice UNUSED) 
 {
-  return thread_current ()->nice = new_nice;
-}
+	thread_current()->nice = new_nice;
+	thread_mlfqs_update_priority(thread_current());
+	thread_yield();}
 
 /* Returns the current thread's nice value. */
 int
@@ -485,15 +485,21 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return real_to_nearst_int(load_avg.value * 100);
+	return FP_ROUND(FP_MULT_MIX(load_avg, 100));
 }
+
+void
+thread_set_load_avg (fixed_t x) 
+{
+	load_avg = x;
+}
+
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  return real_to_nearst_int(thread_current()->recent_cpu.value * 100);
-}
+	return FP_ROUND(FP_MULT_MIX(thread_current()->recent_cpu, 100));}
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -580,18 +586,18 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+  
   t->priority = priority;
   t->effective_priority = priority;
   list_init (&t->holding_locks);
   lock_init(&t->waiting_for);
   t->magic = THREAD_MAGIC;
-  t->nice = 0;
-  t->recent_cpu.value = 0;
 
-  if (thread_mlfqs) {
-    t->nice = running_thread()->nice;
-    t->recent_cpu.value = running_thread()->recent_cpu.value;
-    update_thread_priority(t);
+
+  t->nice = running_thread()->nice;
+  t->recent_cpu = running_thread()->recent_cpu;
+  if(thread_mlfqs){
+    thread_mlfqs_update_priority(t);
   }
 
   old_level = intr_disable ();

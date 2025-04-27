@@ -203,31 +203,34 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  
+  // Disable interrupts once at the start
   enum intr_level old_level = intr_disable ();
-  while(list_size(&sleep_list) && ticks >= list_entry(list_front(&sleep_list), struct sleeping_thread, elem)->waking_time){
+  
+  // Handle sleeping threads
+  while (list_size(&sleep_list) && ticks >= list_entry(list_front(&sleep_list), struct sleeping_thread, elem)->waking_time) {
     struct sleeping_thread *st = list_entry(list_pop_front(&sleep_list), struct sleeping_thread, elem);
     thread_unblock(st->thread);
     // free(st);
   }
   intr_set_level (old_level);
 
+  // Handle MLFQS if enabled
   if (thread_mlfqs) {
-    /* Increase recent_cpu by 1 for running thread (already done above) */
-    if(thread_current() != get_idle_thread())
-      thread_current()->recent_cpu = real_add_to_int(&thread_current()->recent_cpu, 1);
-
-    /* Every second (every TIMER_FREQ ticks = 100 ticks) */
-    if (ticks % TIMER_FREQ == 0) {
-      update_load_avg();
-      update_threads_recent_cpu();
+    thread_mlfqs_increase_recent_cpu_by_one();
+    if (ticks % TIMER_FREQ == 0){
+      // printf("I updated load average ya regala\n");
+        thread_mlfqs_update_load_avg_and_recent_cpu();}
+    else if (ticks % 4 == 0){
+        thread_mlfqs_update_priority_all();
     }
+  }
 
-    /* Every 4 ticks */
-    if (ticks % 4 == 0) {
-      update_threads_priority();
-    }
+  // Re-enable interrupts after all operations are done
 }
-}
+
+
+
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
 static bool

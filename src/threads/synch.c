@@ -82,7 +82,11 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem); //option2: list_insert_order
+      if(thread_mlfqs)
+        list_insert_ordered(&sema->waiters, &thread_current()->elem, mlfqs_comparator, NULL);
+      else
+        // list_insert_ordered(&sema->waiters, &thread_current()->elem, priority_compare, NULL);
+        list_push_back (&sema->waiters, &thread_current ()->elem); //option2: list_insert_order
       thread_block ();
     }
   sema->value--;
@@ -128,14 +132,18 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) {
-    list_sort(&sema->waiters, priority_compare, NULL);
+    if(!thread_mlfqs)
+      list_sort(&sema->waiters, priority_compare, NULL);
     unblocked_thread = list_entry(list_pop_front(&sema->waiters), struct thread, elem);
     thread_unblock(unblocked_thread);
   }
   sema->value++;
-  if (unblocked_thread != NULL && thread_current()->effective_priority < unblocked_thread->effective_priority) {
+  if (!thread_mlfqs && unblocked_thread != NULL && thread_current()->effective_priority < unblocked_thread->effective_priority) {
     thread_yield();
   }
+  // else if (thread_mlfqs && unblocked_thread != NULL && thread_current()->priority < unblocked_thread->priority) {
+  //   thread_yield();
+  // }
   
   intr_set_level (old_level);
 }
@@ -219,7 +227,7 @@ lock_acquire (struct lock *lock)
   /*lock_holder && lock->holder < thread_current-> effective  => thread current->waiting_for = lock
   donate priority()
   */
- if(lock->holder && lock->holder->effective_priority < thread_current()->effective_priority){
+ if(!thread_mlfqs && lock->holder && lock->holder->effective_priority < thread_current()->effective_priority){
   thread_current()->waiting_for = lock;
   donate_priority();
  }
@@ -277,7 +285,8 @@ lock_release (struct lock *lock)
       }
   }
   lock->holder = NULL;
-  update_priority();
+  if(!thread_mlfqs)
+    update_priority();
   //thread_current()->effective_priority = thread_current()->priority;
   sema_up (&lock->semaphore);
   thread_yield();

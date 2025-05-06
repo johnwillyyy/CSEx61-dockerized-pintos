@@ -9,6 +9,8 @@
 
 static void syscall_handler (struct intr_frame *);
 
+uint32_t *eax;
+
 void
 syscall_init (void) 
 {
@@ -58,12 +60,16 @@ void exit (void* vArgs){
 void exec (void* vArgs){
   OneArg* Args = (OneArg*) vArgs;
   tid_t pid = *(tid_t*) Args->arg1; 
+  process_execute(pid);
   //implement
 }
 
 void wait (void* vArgs){
   OneArg* Args = (OneArg*) vArgs;
-  const char *cmd_line = (char*)Args->arg1; 
+  const char *cmd_line = (char*)Args->arg1;
+
+  tid_t tid = process_wait(cmd_line); 
+  *eax = tid;
   //implement
 }
 
@@ -186,6 +192,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   int call_code = *(int *)f->esp;
   // get args
   void* args = load_args(f->esp + 1);
+  eax = &f->eax;
 
   systemCalls[call_code](args);
 }

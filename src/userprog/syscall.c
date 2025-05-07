@@ -17,9 +17,11 @@ syscall_init (void)
 
 typedef void (*SystemCall)(void*);
 
-typedef struct { void* arg1; } OneArg;
-typedef struct { void* arg1; void* arg2; } TwoArg;
-typedef struct { void* arg1; void* arg2; void* arg3; } ThreeArg; 
+/* 
+ * get eax to pass the return value
+ * cast arg1 to the type you want in the system call handler   
+*/
+typedef struct { uint32_t *eax; void* arg1; void* arg2; void* arg3; } Arguments;
 
 SystemCall systemCalls[] = {
   halt,
@@ -37,93 +39,86 @@ SystemCall systemCalls[] = {
   close
 };
 
-// OneArg one_arg;
-// TwoArg two_arg;
-// ThreeArg three_arg;
-
-// void *args[] = {
-  
-// };
-
 void halt (void* vArgs){
   shutdown_power_off();
 }
 
 void exit (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  int status = *(int*) Args->arg1;
+  Arguments* args = (Arguments*)vArgs;
+  int status = *(int*) args->arg1;
   //implement
 }
 
 void exec (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  tid_t pid = *(tid_t*) Args->arg1; 
+  Arguments* args = (Arguments*)vArgs;
+  tid_t pid = *(tid_t*) args->arg1;
   //implement
 }
 
 void wait (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  const char *cmd_line = (char*)Args->arg1; 
+  Arguments* args = (Arguments*)vArgs;
+  const char *cmd_line = (char*) args->arg1; 
   //implement
 }
 
 void create (void* vArgs){
-  TwoArg* Args = (TwoArg*) vArgs;
-  const char *file = (char*)Args->arg1;
-  unsigned initial_size = *(unsigned*)Args->arg2;
+  Arguments* args = (Arguments*)vArgs;
+
+  const char *file = (char*) args->arg1;
+  unsigned initial_size = *(unsigned*) args->arg2;
   //implement
 }
 
 void remove (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  const char *file = (char*)Args->arg1;
+  Arguments* args = (Arguments*)vArgs;
+  const char *file = (char*) args->arg1;
   //implement
 }
 
 void open (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  const char *file = (char*)Args->arg1;
+  Arguments* args = (Arguments*)vArgs;
+  const char *filename = (char*) args->arg1;
   //implement
 }
 
 void filesize (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  int fd = *(int*)Args->arg1;
+  Arguments* args = (Arguments*)vArgs;
+  int fd = *(int*) args->arg1;
   //implement
 }
 
 void read (void* vArgs){
-  ThreeArg* Args = (ThreeArg*) vArgs;
-  int fd = *(int*)Args->arg1;
-  void *buffer = Args->arg2;
-  unsigned size = *(unsigned*)Args->arg3;
+  Arguments* args = (Arguments*)vArgs;
+  int fd = *(int*) args->arg1;
+  void *buffer = args->arg2;
+  unsigned size = *(unsigned*) args->arg3;
   //implement
 }
 
 void write (void* vArgs){
-  ThreeArg* Args = (ThreeArg*) vArgs;
-  int fd = *(int*)Args->arg1;
-  const void *buffer = Args->arg2;
-  unsigned size = *(unsigned*)Args->arg3;
+  Arguments* args = (Arguments*)vArgs;
+  int fd = *(int*) args->arg1;
+  const void *buffer = args->arg2;
+  unsigned size = *(unsigned*) args->arg3;
   //implement
 }
 
 void seek (void* vArgs){
-  TwoArg* Args = (TwoArg*) vArgs;
-  int fd = *(int *)Args->arg1;
-  unsigned position = *(unsigned *)Args->arg2;
+  Arguments* args = (Arguments*)vArgs;
+  int fd = *(int *) args->arg1;
+  unsigned position = *(unsigned *) args->arg2;
   //implement
 }
 
 void tell (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  int fd = *(int*)Args->arg1;
+  Arguments* args = (Arguments*)vArgs;
+  int fd = *(int *) args->arg1;
   //implement
 }
 
 void close (void* vArgs){
-  OneArg* Args = (OneArg*) vArgs;
-  int fd = *(int *)Args->arg1;
+  Arguments* args = (Arguments*)vArgs;
+  int fd = *(int *) args->arg1;
   // implement
 }
 
@@ -144,48 +139,19 @@ convert(void *address){
   return vaddress;
 }
 
-void * load_args(void *esp){
-  ThreeArg *Args = malloc(sizeof(ThreeArg));
+void * load_args(void *esp, uint32_t *eax){
+  Arguments *Args = malloc(sizeof(Arguments));
   Args->arg1 = convert(validate(esp));
   Args->arg2 = convert(validate((void *)((int *)esp + 1)));
   Args->arg3 = convert(validate((void *)((int *)esp + 2)));
+  Args->eax = eax;
   return (void *) Args;
-  // switch (call_code) {
-  //   case SYS_HALT:
-  //   case SYS_EXIT:
-  //   case SYS_EXEC:
-  //   case SYS_WAIT:
-  //   case SYS_REMOVE:
-  //   case SYS_OPEN:
-  //   case SYS_FILESIZE:
-  //   case SYS_TELL:
-  //   case SYS_CLOSE:
-  //     OneArg *oneArg = malloc(sizeof(OneArg));
-  //     oneArg->arg1 = convert(validate(esp));
-  //     return (void *) oneArg;
-  //   case SYS_CREATE:
-  //   case SYS_SEEK:
-  //     TwoArg *twoArg = malloc(sizeof(TwoArg));
-  //     twoArg->arg1 = convert(validate(esp));
-  //     twoArg->arg2 = convert(validate((void *)((int *)esp + 1)));
-  //     return (void *) twoArg;
-  //   case SYS_READ:
-  //   case SYS_WRITE:
-  //     ThreeArg *threeArg = malloc(sizeof(ThreeArg));
-  //     threeArg->arg1 = convert(validate(esp));
-  //     threeArg->arg2 = convert(validate((void *)((int *)esp + 1)));
-  //     threeArg->arg3 = convert(validate((void *)((int *)esp + 2)));
-  //     return (void *) threeArg;
-  // }
-  // return NULL;
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int call_code = *(int *)f->esp;
-  // get args
-  void* args = load_args(f->esp + 1);
-
+  void* args = load_args(f->esp + 1, &f->eax);
   systemCalls[call_code](args);
 }

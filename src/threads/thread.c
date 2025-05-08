@@ -90,6 +90,7 @@ thread_init (void)
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	lock_init (&tid_lock);
+	lock_init (&filesys_lock);
 	list_init (&ready_list);
 	list_init (&all_list);
 
@@ -471,6 +472,8 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->stack = (uint8_t *) t + PGSIZE;
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	list_init (&t->opened_files);
+	t->next_fd = 2;
 
 	old_level = intr_disable ();
 	list_push_back (&all_list, &t->allelem);

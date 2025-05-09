@@ -26,7 +26,7 @@ static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
-static struct list all_list;
+struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -183,6 +183,39 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
+
+	struct child *child = malloc(sizeof(struct child));
+	if (child == NULL) {
+		printf("malloc failed\n");
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
+	child->tid = tid;
+	child->exited = false;
+	child->waited_on = false;
+	child->exit_status = 0;
+	sema_init(&child->parent_synch, 0);
+
+	list_push_back(&thread_current()->children, &child->child_elem); 
+
+	if(thread_current()!= initial_thread) //Credit for John William for the condition
+	{
+      t->parent = thread_current(); 
+	}
+
+	//thread_current calling thread_create to open file palloc main memory
+	//create t
+	//create with it struct child maloc
+	//add malloc inside list of children of parent
+	//t->parent = thread_current();
+
+	//parent -> children list [palloc] [malloc]
+	//parent -> children list [pointers]
+	//process wait thread_exit()
+	//free(page)
+	//parent -> child* -> wrong
+
+
 
 	/* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -470,6 +503,10 @@ init_thread (struct thread *t, const char *name, int priority)
 	strlcpy (t->name, name, sizeof t->name);
 	t->stack = (uint8_t *) t + PGSIZE;
 	t->priority = priority;
+
+	t->parent = NULL;
+	list_init(&t->children);
+
 	t->magic = THREAD_MAGIC;
 	list_init (&t->opened_files);
 	t->next_fd = 2;

@@ -81,6 +81,18 @@ kill (struct intr_frame *f)
      
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
+
+
+   struct thread *cur = thread_current();
+   
+   if (cur != NULL && cur->parent != NULL) {
+      struct child *child_in_parent = get_child(&cur->parent->children, cur->tid);
+      if (child_in_parent != NULL) {
+         child_in_parent->exit_status = -1;
+       }
+   }   
+
+
   switch (f->cs)
     {
     case SEL_UCSEG:

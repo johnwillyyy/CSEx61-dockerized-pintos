@@ -16,6 +16,8 @@ struct lock filesys_lock;
 
 static void syscall_handler (struct intr_frame *);
 
+uint32_t *eax;
+
 void
 syscall_init (void) 
 {
@@ -42,6 +44,7 @@ SystemCall systemCalls[] = {
 };
 
 void halt (Arguments *args){
+  // printf("(halt) begin");
   shutdown_power_off();
 }
 
@@ -52,12 +55,12 @@ void exit (Arguments *args){
 
 void exec (Arguments *args){
   const char *cmd_line = (char*) args->arg1;
-  //implement
+  *eax = process_execute(cmd_line);
 }
 
 void wait (Arguments *args){
-  tid_t pid = *(tid_t*) args->arg1; 
-  //implement
+  tid_t pid = *(tid_t*) args->arg1;
+  *eax = process_wait(pid);
 }
 
 void create (Arguments *args){

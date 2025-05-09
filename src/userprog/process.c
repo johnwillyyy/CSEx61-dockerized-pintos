@@ -28,6 +28,49 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char** s
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+
+
+struct child *
+get_child(struct list *children, tid_t child_tid) {
+	struct list_elem *e;
+
+	for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
+		struct child *c = list_entry(e, struct child, child_elem);
+		if (c->tid == child_tid) {
+			return c;
+		}
+	}
+
+	return NULL; // No matching child found
+}
+   
+void
+remove_child(struct list *children, tid_t child_tid) {
+    struct list_elem *e;
+
+    for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
+        struct child *c = list_entry(e, struct child, child_elem);
+        if (c->tid == child_tid) {
+            list_remove(e);
+            free(c);  
+            return;
+        }
+    }
+}
+
+struct thread *
+get_thread_by_tid(tid_t tid) {
+    struct list_elem *e;
+
+    for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+        struct thread *t = list_entry(e, struct thread, allelem);
+        if (t->tid == tid) {
+            return t;
+        }
+    }
+    return NULL;
+}
+
 tid_t
 process_execute (const char *file_name) 
 {
@@ -46,7 +89,11 @@ process_execute (const char *file_name)
 	file_name = strtok_r((char *) file_name, " ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
+    //call process_wait();
+
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+	process_wait(tid);
+
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -74,9 +121,15 @@ start_process (void *file_name_)
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
+	if (!success){
+		struct thread *cur = thread_current();
+		struct child *child_in_parent = get_child(&cur->parent->children, cur->tid);
+		
+		if (child_in_parent != NULL) {
+		   child_in_parent->exit_status = -1;
+		}  
 		thread_exit ();
-
+    }
 	/* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -97,11 +150,34 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-	for(int i = 0; i < 1000000000; i++){} // busy wait
-	return -1;
+    struct child * child = get_child(&thread_current()->children, child_tid);
+	if(child == NULL || child->waited_on == true) {
+		return -1;
+	}
+
+	child->waited_on = true;   //Credit for John William for that 
+
+	if(!child->exited) {
+		sema_down(&child->parent_synch);
+	}
+
+	remove_child(&thread_current()->children, child);
+
+	return child->exit_status;
 }
+
+//loop on the children of the thread_current()
+//get the chid struct
+
+//if(child == NULL || child->waited_on=true)  return -1
+
+//if(!child->exited)sema_down
+//remove_child(children)
+//return child->child_status
+
+
 
 /* Free the current process's resources. */
 void
@@ -112,6 +188,38 @@ process_exit (void)
 
 	/* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+
+	//thread_exit->true
+	//release resources
+	//sema_up 
+
+	if(cur->parent != NULL){
+		struct child *child = get_child(&cur->parent->children, cur->tid);
+		if(child != NULL) {
+			child->exited = true;
+			sema_up(&child->parent_synch);
+		}
+	}
+    
+    
+	//release resources
+
+    //set parent == null 
+	//while loop remove children
+
+	struct list_elem *e = list_begin(&cur->children);
+	while (e != list_end(&cur->children)) {
+		struct child *c = list_entry(e, struct child, child_elem);
+		e = list_remove(e);
+		struct thread *t = get_thread_by_tid(c->tid);
+		if (t != NULL) {
+			t->parent = NULL;
+		}
+
+		free(c);
+	}
+
+
 	pd = cur->pagedir;
 	if (pd != NULL)
 	{
@@ -555,3 +663,40 @@ static void push_stack( int order, void **esp, char *token, char **argv, int arg
 		break;
 	}
 }
+
+
+// wait process
+//thread { list children , struct thread * parent }
+//children [thread *1 , thread *2 , thread *3]
+//thread 1 spawn chilf thread 2 
+//process_wait (thread 2)
+//thread 2 exit zombie exited wait()
+//thread_exit -> palloc_free(thread 2)
+//proces_wait(thread 2){ loop thread 2 -> exit_status (0,-1) , ->exited 0,1, }
+//process_wait(tid){ child thread !exited sema_down(&sema_wait) }
+//thread_exit(thread 2){ sema_up() }
+
+//process_wait(tid){ if(child==NUL) return -1}
+//->exited
+
+//process_exit thread_create -> child lel parent , call process_wait 
+//if(waited_on ==true) return -1
+//parent dead -> [child 1,2,3] -> [empty]
+//thread 1,2,3 in system
+//loop threads
+//system thread_exit
+//set parent none 
+//release resources
+//flow
+//thread_exit()
+//sema_up(thread->sema_wait)
+
+//thread .h   doneee
+//struct child  doneee
+//thread init   done
+//thread_create + child init done
+
+
+
+//wait process  
+//->>>>

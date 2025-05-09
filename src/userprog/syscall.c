@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
-#include "threads/thread.h"
 #include "threads/synch.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -25,12 +24,6 @@ syscall_init (void)
 }
 
 typedef void (*SystemCall)(Arguments*);
-
-/* 
- * get eax to pass the return value
- * cast arg1 to the type you want in the system call handler   
-*/
-typedef struct { uint32_t *eax; void* arg1; void* arg2; void* arg3; } Arguments;
 
 SystemCall systemCalls[] = {
   halt,

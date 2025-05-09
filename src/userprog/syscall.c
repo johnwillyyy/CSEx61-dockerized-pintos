@@ -13,15 +13,18 @@
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
+struct lock filesys_lock;
+
 static void syscall_handler (struct intr_frame *);
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&filesys_lock);
 }
 
-typedef void (*SystemCall)(void*);
+typedef void (*SystemCall)(Arguments*);
 
 /* 
  * get eax to pass the return value
@@ -45,31 +48,26 @@ SystemCall systemCalls[] = {
   close
 };
 
-void halt (void* vArgs){
+void halt (Arguments *args){
   shutdown_power_off();
 }
 
-void exit (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void exit (Arguments *args){
   int status = *(int*) args->arg1;
   //implement
 }
 
-void exec (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
-  tid_t pid = *(tid_t*) args->arg1;
+void exec (Arguments *args){
+  const char *cmd_line = (char*) args->arg1;
   //implement
 }
 
-void wait (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
-  const char *cmd_line = (char*) args->arg1; 
+void wait (Arguments *args){
+  tid_t pid = *(tid_t*) args->arg1; 
   //implement
 }
 
-void create (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
-
+void create (Arguments *args){
   const char *file = (char*) args->arg1;
   unsigned initial_size = *(unsigned*) args->arg2;
   
@@ -78,8 +76,7 @@ void create (void* vArgs){
   lock_release(&filesys_lock);
 }
 
-void remove (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void remove (Arguments *args){
   const char *file = (char*) args->arg1;
 
   lock_acquire(&filesys_lock);
@@ -87,8 +84,7 @@ void remove (void* vArgs){
   lock_release(&filesys_lock);
 }
 
-void open (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void open (Arguments *args){
   const char *filename = (char*) args->arg1;
 
   lock_acquire(&filesys_lock);
@@ -100,7 +96,7 @@ void open (void* vArgs){
     return;
   }
 
-  struct opened_file * opened_file = (struct opened_file *) malloc(sizeof(opened_file));
+  struct opened_file * opened_file = (struct opened_file *) malloc(sizeof(struct opened_file));
   struct thread * current = thread_current();
   opened_file->file = file;
   opened_file->fd = current->next_fd++;
@@ -122,8 +118,7 @@ struct file* get_file(int file_descriptor){
   return NULL;
 }
 
-void filesize (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void filesize (Arguments *args){
   int fd = *(int*) args->arg1;
   struct file *file = get_file(fd);
   if(file == NULL){
@@ -135,8 +130,7 @@ void filesize (void* vArgs){
   lock_release(&filesys_lock);
 }
 
-void read (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void read (Arguments *args){
   int fd = *(int*) args->arg1;
   void *buffer = args->arg2;
   unsigned size = *(unsigned*) args->arg3;
@@ -162,8 +156,7 @@ void read (void* vArgs){
   }
 }
 
-void write (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void write (Arguments *args){
   int fd = *(int*) args->arg1;
   const void *buffer = args->arg2;
   unsigned size = *(unsigned*) args->arg3;
@@ -187,8 +180,7 @@ void write (void* vArgs){
   }
 }
 
-void seek (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void seek (Arguments *args){
   int fd = *(int *) args->arg1;
   unsigned position = *(unsigned *) args->arg2;
   struct file *file = get_file(fd);
@@ -198,8 +190,7 @@ void seek (void* vArgs){
   lock_release(&filesys_lock);
 }
 
-void tell (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void tell (Arguments *args){
   int fd = *(int *) args->arg1;
   struct file *file = get_file(fd);
   
@@ -208,8 +199,7 @@ void tell (void* vArgs){
   lock_release(&filesys_lock);
 }
 
-void close (void* vArgs){
-  Arguments* args = (Arguments*)vArgs;
+void close (Arguments *args){
   int fd = *(int *) args->arg1;
   struct file *file = get_file(fd);
 
@@ -235,19 +225,19 @@ convert(void *address){
   return vaddress;
 }
 
-void * load_args(void *esp, uint32_t *eax){
-  Arguments *Args = malloc(sizeof(Arguments));
-  Args->arg1 = convert(validate(esp));
-  Args->arg2 = convert(validate((void *)((int *)esp + 1)));
-  Args->arg3 = convert(validate((void *)((int *)esp + 2)));
-  Args->eax = eax;
-  return (void *) Args;
+Arguments * load_args(void *esp, uint32_t *eax){
+  Arguments *args = malloc(sizeof(Arguments));
+  args->arg1 = convert(validate(esp));
+  args->arg2 = convert(validate((void *)((int *)esp + 1)));
+  args->arg3 = convert(validate((void *)((int *)esp + 2)));
+  args->eax = eax;
+  return args;
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int call_code = *(int *)f->esp;
-  void* args = load_args(f->esp + 1, &f->eax);
+  Arguments *args = load_args(f->esp + 1, &f->eax);
   systemCalls[call_code](args);
 }

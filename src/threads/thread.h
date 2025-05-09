@@ -107,7 +107,6 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-  struct lock filesys_lock;
   struct opened_file
    {
       int fd;      				/* file descriptor */

@@ -4,18 +4,18 @@
 void syscall_init (void);
 
 /* System Calls Definetions*/
-void halt (void* vArgs);
-void exit (void* vArgs);
-void exec (void* vArgs);
-void wait (void* vArgs);
-void create (void* vArgs);
-void remove (void* vArgs);
-void open (void* vArgs);
-void filesize (void* vArgs);
-void read (void* vArgs);
-void write (void* vArgs);
-void seek (void* vArgs);
-void tell (void* vArgs);
-void close (void* vArgs);
+void halt (Arguments *args);
+void exit (Arguments *args);
+void exec (Arguments *args);
+void wait (Arguments *args);
+void create (Arguments *args);
+void remove (Arguments *args);
+void open (Arguments *args);
+void filesize (Arguments *args);
+void read (Arguments *args);
+void write (Arguments *args);
+void seek (Arguments *args);
+void tell (Arguments *args);
+void close (Arguments *args);
 
 #endif /* userprog/syscall.h */

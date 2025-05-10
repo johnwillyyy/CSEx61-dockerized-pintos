@@ -44,13 +44,24 @@ SystemCall systemCalls[] = {
 };
 
 void halt (Arguments *args){
-  // printf("(halt) begin");
+  
   shutdown_power_off();
 }
 
 void exit (Arguments *args){
   int status = *(int*) args->arg1;
-  //implement
+
+  struct thread *cur = thread_current();
+  if (cur->parent != NULL) {
+      struct child *child = get_child(&cur->parent->children, cur->tid);
+      if (child != NULL) {
+          child->exit_status = status;
+      }
+  }
+
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  thread_exit();
+  
 }
 
 void exec (Arguments *args){

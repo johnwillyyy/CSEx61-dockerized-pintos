@@ -86,17 +86,35 @@ process_execute (const char *file_name)
 
 	/* Parsed file name */
 	char *save_ptr;
-	file_name = strtok_r((char *) file_name, " ", &save_ptr);
+    char *name_copy = palloc_get_page(0);
+    if (name_copy == NULL) {
+        palloc_free_page(fn_copy);
+        return TID_ERROR;
+    }
+    strlcpy(name_copy, file_name, PGSIZE);
+    char *thread_name = strtok_r(name_copy, " ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
-    //call process_wait();
 
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-	process_wait(tid);
+	palloc_free_page(name_copy);
 
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
+
+	struct child *child = get_child(&thread_current()->children, tid);
+    if (child == NULL) {
+        return TID_ERROR;
+    }
+	sema_down(&child->load_sema);
+	process_wait(child->tid);
+
+	if (!child->load_success) {
+        return TID_ERROR;
+    }
+    
+    return tid;
 }
 
 /* A thread function that loads a user process and starts it
@@ -120,14 +138,18 @@ start_process (void *file_name_)
 	success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
 
 	/* If load failed, quit. */
+
+	struct thread *cur = thread_current();
+    if (cur->parent != NULL) {
+        struct child *child_in_parent = get_child(&cur->parent->children, cur->tid);
+        if (child_in_parent != NULL) {
+            child_in_parent->load_success = success;
+            sema_up(&child_in_parent->load_sema);
+        }
+    }
+
 	palloc_free_page (file_name);
 	if (!success){
-		struct thread *cur = thread_current();
-		struct child *child_in_parent = get_child(&cur->parent->children, cur->tid);
-		
-		if (child_in_parent != NULL) {
-		   child_in_parent->exit_status = -1;
-		}  
 		thread_exit ();
     }
 	/* Start the user process by simulating a return from an
@@ -163,7 +185,7 @@ process_wait (tid_t child_tid)
 		sema_down(&child->parent_synch);
 	}
 
-	remove_child(&thread_current()->children, child);
+	remove_child(&thread_current()->children, child_tid);
 
 	return child->exit_status;
 }
@@ -210,12 +232,12 @@ process_exit (void)
 	struct list_elem *e = list_begin(&cur->children);
 	while (e != list_end(&cur->children)) {
 		struct child *c = list_entry(e, struct child, child_elem);
-		e = list_remove(e);
+		e = list_next(e);
 		struct thread *t = get_thread_by_tid(c->tid);
 		if (t != NULL) {
 			t->parent = NULL;
 		}
-
+		list_remove(&c->child_elem);
 		free(c);
 	}
 

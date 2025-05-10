@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -194,8 +195,9 @@ thread_create (const char *name, int priority,
 	child->exited = false;
 	child->waited_on = false;
 	child->exit_status = 0;
+	child->load_success = false;
 	sema_init(&child->parent_synch, 0);
-
+	sema_init(&child->load_sema, 0);
 	list_push_back(&thread_current()->children, &child->child_elem); 
 
 	if(thread_current()!= initial_thread) //Credit for John William for the condition
@@ -323,9 +325,9 @@ thread_exit (void)
 {
 	ASSERT (!intr_context ());
 
-#ifdef USERPROG
+
 	process_exit ();
-#endif
+
 
 	/* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us

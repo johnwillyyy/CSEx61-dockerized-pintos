@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <threads/synch.h>
 
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -122,7 +123,9 @@ struct thread
    bool exited;
    bool waited_on;
    int exit_status;
+   bool load_success;
    struct semaphore parent_synch;
+   struct semaphore load_sema;
    struct list_elem child_elem;    
    struct list_elem elem; 
 

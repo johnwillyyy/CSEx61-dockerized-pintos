@@ -231,9 +231,9 @@ convert(void *address){
 
 Arguments * load_args(void *esp, uint32_t *eax){
   Arguments *args = malloc(sizeof(Arguments));
-  args->arg1 = convert(validate(esp));
-  args->arg2 = convert(validate((void *)((int *)esp + 1)));
-  args->arg3 = convert(validate((void *)((int *)esp + 2)));
+  args->arg1 = convert(validate(esp + 4));
+  args->arg2 = convert(validate(esp + 8));
+  args->arg3 = convert(validate(esp + 12));
   args->eax = eax;
   return args;
 }
@@ -242,6 +242,7 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int call_code = *(int *)f->esp;
-  Arguments *args = load_args(f->esp + 1, &f->eax);
+  Arguments *args = load_args((void *)f->esp, &f->eax);
   systemCalls[call_code](args);
+  free(args);
 }

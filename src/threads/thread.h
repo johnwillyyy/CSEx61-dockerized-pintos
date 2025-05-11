@@ -92,7 +92,12 @@ struct thread
 
     struct list opened_files;
     int next_fd;
+    
+    struct list children;                 /* list of all children*/
+   //  struct thread *parent;                /* thread parent*/
 
+    struct child *child_representation;   /* this thread as a child to its parent*/
+   
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -112,6 +117,19 @@ struct thread
       int fd;      				/* file descriptor */
       struct file * file;
       struct list_elem elem; 
+   };
+
+  struct child       
+   {
+      tid_t tid;
+      bool exited;
+      bool waited_on;
+      int exit_status;
+      // bool load_success;
+      bool parent_exited;
+      struct semaphore child_wait;
+      struct semaphore parent_wait;
+      struct list_elem elem;
    };
 
 /* If false (default), use round-robin scheduler.

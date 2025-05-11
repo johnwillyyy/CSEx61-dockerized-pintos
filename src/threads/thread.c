@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
@@ -182,7 +183,25 @@ thread_create (const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
+	t->child_representation = malloc(sizeof(struct child));
+	if (t->child_representation == NULL) {
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
+	
+	sema_init(&t->child_representation->child_wait, 0);
+	sema_init(&t->child_representation->parent_wait, 0);
+	t->child_representation->exit_status = -1;
+	t->child_representation->exited = false;
+	// t->child_representation->load_success = false;
+	t->child_representation->waited_on = false;
+	t->child_representation->parent_exited = false;
+
 	tid = t->tid = allocate_tid ();
+
+    // t->parent = thread_current(); 
+	t->child_representation->tid = tid;
+	list_push_back(&thread_current()->children, &t->child_representation->elem);
 
 	/* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -473,6 +492,9 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->magic = THREAD_MAGIC;
 	list_init (&t->opened_files);
 	t->next_fd = 2;
+
+	// t->parent = NULL;
+	list_init(&t->children);  
 
 	old_level = intr_disable ();
 	list_push_back (&all_list, &t->allelem);

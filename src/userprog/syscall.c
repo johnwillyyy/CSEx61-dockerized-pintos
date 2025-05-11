@@ -7,12 +7,14 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 
 #define ERROR -1
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
 struct lock filesys_lock;
+static struct lock fd_lock;
 
 static void syscall_handler (struct intr_frame *);
 
@@ -21,6 +23,7 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&filesys_lock);
+  lock_init (&fd_lock);
 }
 
 typedef void (*SystemCall)(Arguments*);
@@ -46,18 +49,22 @@ void halt (Arguments *args){
 }
 
 void exit (Arguments *args){
-  int status = *(int*) args->arg1;
-  //implement
+  int status = *(int*) args->arg1;  
+  thread_current()->child_representation->exited = true;
+  thread_current()->child_representation->exit_status = status;
+
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  thread_exit();
 }
 
 void exec (Arguments *args){
   const char *cmd_line = (char*) args->arg1;
-  //implement
+  *args->eax = process_execute(cmd_line);
 }
 
 void wait (Arguments *args){
   tid_t pid = *(tid_t*) args->arg1; 
-  //implement
+  *args->eax = process_wait(pid);
 }
 
 void create (Arguments *args){
@@ -92,8 +99,12 @@ void open (Arguments *args){
   struct opened_file * opened_file = (struct opened_file *) malloc(sizeof(struct opened_file));
   struct thread * current = thread_current();
   opened_file->file = file;
-  opened_file->fd = current->next_fd++;
-  list_push_front(&current->opened_files, &opened_file->elem);
+  opened_file->fd = current->next_fd;
+  lock_acquire (&fd_lock);
+  current->next_fd++;
+  lock_release (&fd_lock);
+
+  list_push_back(&current->opened_files, &opened_file->elem);
 
   *args->eax = opened_file->fd;      /* return fd by assignning it to the eax */
 }

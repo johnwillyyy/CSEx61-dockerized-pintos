@@ -8,7 +8,7 @@ void syscall_init (void);
  * get eax to pass the return value
  * cast arg1 to the type you want in the system call handler   
 */
-typedef struct { uint32_t *eax; void* arg1; void* arg2; void* arg3; } Arguments;
+typedef struct { uint32_t *eax; int arg1; int arg2; int arg3; } Arguments;
 
 /* System Calls Definetions*/
 void halt (Arguments *args);

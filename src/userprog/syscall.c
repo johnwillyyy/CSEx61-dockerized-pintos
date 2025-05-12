@@ -49,7 +49,7 @@ void halt (Arguments *args){
 }
 
 void exit (Arguments *args){
-  int status = *(int*) args->arg1;  
+  int status = args->arg1;  
   thread_current()->child_representation->exited = true;
   thread_current()->child_representation->exit_status = status;
 
@@ -63,7 +63,7 @@ void exec (Arguments *args){
 }
 
 void wait (Arguments *args){
-  tid_t pid = *(tid_t*) args->arg1; 
+  tid_t pid = args->arg1; 
   *args->eax = process_wait(pid);
 }
 
@@ -123,7 +123,7 @@ struct file* get_file(int file_descriptor){
 }
 
 void filesize (Arguments *args){
-  int fd = *(int*) args->arg1;
+  int fd = args->arg1;
   struct file *file = get_file(fd);
   if(file == NULL){
     *args->eax = ERROR;
@@ -135,9 +135,9 @@ void filesize (Arguments *args){
 }
 
 void read (Arguments *args){
-  int fd = *(int*) args->arg1;
-  void *buffer = args->arg2;
-  unsigned size = *(unsigned*) args->arg3;
+  int fd = args->arg1;
+  void *buffer = (void *) args->arg2;
+  unsigned size = args->arg3;
 
   if (fd == STDIN_FILENO) {
     for (unsigned i = 0; i < size; i++) {
@@ -161,9 +161,9 @@ void read (Arguments *args){
 }
 
 void write (Arguments *args){
-  int fd = *(int*) args->arg1;
-  const void *buffer = args->arg2;
-  unsigned size = *(unsigned*) args->arg3;
+  int fd = args->arg1;
+  const void *buffer = (void *) args->arg2;
+  unsigned size = args->arg3;
 
   if (fd == STDOUT_FILENO) {
     lock_acquire(&filesys_lock);
@@ -185,8 +185,8 @@ void write (Arguments *args){
 }
 
 void seek (Arguments *args){
-  int fd = *(int *) args->arg1;
-  unsigned position = *(unsigned *) args->arg2;
+  int fd = args->arg1;
+  unsigned position = args->arg2;
   struct file *file = get_file(fd);
   
   lock_acquire(&filesys_lock);
@@ -195,7 +195,7 @@ void seek (Arguments *args){
 }
 
 void tell (Arguments *args){
-  int fd = *(int *) args->arg1;
+  int fd = args->arg1;
   struct file *file = get_file(fd);
   
   lock_acquire(&filesys_lock);
@@ -204,7 +204,7 @@ void tell (Arguments *args){
 }
 
 void close (Arguments *args){
-  int fd = *(int *) args->arg1;
+  int fd = args->arg1;
   struct file *file = get_file(fd);
 
   lock_acquire(&filesys_lock);
@@ -212,28 +212,28 @@ void close (Arguments *args){
   lock_release(&filesys_lock);
 }
 
-void * 
-validate(void *address){
-  if(address < (void *) 0x08048000 || address >= PHYS_BASE){
+int * 
+validate(int *address){
+  if(address < (int *) 0x08048000 || address >= PHYS_BASE){
     exit(ERROR);
   }
   return address;
 }
 
-void *
-convert(void *address){
-  void *vaddress = pagedir_get_page(thread_current()->pagedir, address);
+int *
+convert(int *address){
+  int *vaddress = pagedir_get_page(thread_current()->pagedir, address);
   if(vaddress == NULL){
     exit(ERROR);
   }
   return vaddress;
 }
 
-Arguments * load_args(void *esp, uint32_t *eax){
+Arguments * load_args(int *esp, uint32_t *eax){
   Arguments *args = malloc(sizeof(Arguments));
-  args->arg1 = convert(validate(esp + 4));
-  args->arg2 = convert(validate(esp + 8));
-  args->arg3 = convert(validate(esp + 12));
+  args->arg1 = *convert(validate(esp + 1));
+  args->arg2 = *convert(validate(esp + 2));
+  args->arg3 = *convert(validate(esp + 3));
   args->eax = eax;
   return args;
 }
@@ -242,7 +242,7 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int call_code = *(int *)f->esp;
-  Arguments *args = load_args((void *)f->esp, &f->eax);
+  Arguments *args = load_args((int *)f->esp, &f->eax);
   systemCalls[call_code](args);
   free(args);
 }

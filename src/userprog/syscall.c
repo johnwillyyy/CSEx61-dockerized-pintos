@@ -9,21 +9,17 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 
-#define ERROR -1
-#define STDIN_FILENO 0
-#define STDOUT_FILENO 1
-
 struct lock filesys_lock;
-static struct lock fd_lock;
 
 static void syscall_handler (struct intr_frame *);
+void validate_string(char *str);
+void validate_buffer(void *buffer, unsigned size);
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&filesys_lock);
-  lock_init (&fd_lock);
 }
 
 typedef void (*SystemCall)(Arguments*);
@@ -59,6 +55,7 @@ void exit (Arguments *args){
 
 void exec (Arguments *args){
   const char *cmd_line = (char*) args->arg1;
+  validate_string(cmd_line);
   *args->eax = process_execute(cmd_line);
 }
 
@@ -69,6 +66,7 @@ void wait (Arguments *args){
 
 void create (Arguments *args){
   const char *file = (char*) args->arg1;
+  validate_string(file);
   unsigned initial_size = *(unsigned*) args->arg2;
   
   lock_acquire(&filesys_lock);
@@ -78,6 +76,7 @@ void create (Arguments *args){
 
 void remove (Arguments *args){
   const char *file = (char*) args->arg1;
+  validate_string(file);
 
   lock_acquire(&filesys_lock);
   *args->eax = filesys_remove(file);
@@ -86,6 +85,7 @@ void remove (Arguments *args){
 
 void open (Arguments *args){
   const char *filename = (char*) args->arg1;
+  validate_string(filename);
 
   lock_acquire(&filesys_lock);
   struct file * file = filesys_open(filename);
@@ -99,10 +99,7 @@ void open (Arguments *args){
   struct opened_file * opened_file = (struct opened_file *) malloc(sizeof(struct opened_file));
   struct thread * current = thread_current();
   opened_file->file = file;
-  opened_file->fd = current->next_fd;
-  lock_acquire (&fd_lock);
-  current->next_fd++;
-  lock_release (&fd_lock);
+  opened_file->fd = current->next_fd++;
 
   list_push_back(&current->opened_files, &opened_file->elem);
 
@@ -138,6 +135,7 @@ void read (Arguments *args){
   int fd = args->arg1;
   void *buffer = (void *) args->arg2;
   unsigned size = args->arg3;
+  validate_buffer(buffer, size);
 
   if (fd == STDIN_FILENO) {
     for (unsigned i = 0; i < size; i++) {
@@ -164,6 +162,7 @@ void write (Arguments *args){
   int fd = args->arg1;
   const void *buffer = (void *) args->arg2;
   unsigned size = args->arg3;
+  validate_buffer(buffer, size);
 
   if (fd == STDOUT_FILENO) {
     lock_acquire(&filesys_lock);
@@ -215,7 +214,7 @@ void close (Arguments *args){
 int * 
 validate(int *address){
   if(address < (int *) 0x08048000 || address >= PHYS_BASE){
-    exit(ERROR);
+    exit(ERROR_ARG);
   }
   return address;
 }
@@ -224,16 +223,32 @@ int *
 convert(int *address){
   int *vaddress = pagedir_get_page(thread_current()->pagedir, address);
   if(vaddress == NULL){
-    exit(ERROR);
+    exit(ERROR_ARG);
   }
   return vaddress;
 }
 
+void
+validate_string(char *str){
+  char *check_valid = (char *) SAFE(str);
+  while(check_valid != 0){
+     check_valid = (char *) SAFE(++str);
+  }
+}
+
+void
+validate_buffer(void *buffer, unsigned size){
+  char *check_valid = (char *) buffer;
+  for (unsigned i = 0; i < size; i++) {
+      SAFE(check_valid++);
+  }
+}
+
 Arguments * load_args(int *esp, uint32_t *eax){
   Arguments *args = malloc(sizeof(Arguments));
-  args->arg1 = *convert(validate(esp + 1));
-  args->arg2 = *convert(validate(esp + 2));
-  args->arg3 = *convert(validate(esp + 3));
+  args->arg1 = *SAFE(esp + 1);
+  args->arg2 = *SAFE(esp + 2);
+  args->arg3 = *SAFE(esp + 3);
   args->eax = eax;
   return args;
 }

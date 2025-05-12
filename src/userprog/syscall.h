@@ -10,6 +10,12 @@ void syscall_init (void);
 */
 typedef struct { uint32_t *eax; int arg1; int arg2; int arg3; } Arguments;
 
+#define ERROR -1
+#define ERROR_ARG ((Arguments[]){ { .arg1 = -1 } })
+#define SAFE(ptr) convert(validate(ptr))
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+
 /* System Calls Definetions*/
 void halt (Arguments *args);
 void exit (Arguments *args);

@@ -72,38 +72,19 @@ wake_children(struct list *children)
 tid_t
 process_execute (const char *file_name) 
 {
-	// char *fn_copy;
-	// tid_t tid;
-
-	// /* Make a copy of FILE_NAME.
-    //  Otherwise there's a race between the caller and load(). */
-	// fn_copy = palloc_get_page (0);
-	// if (fn_copy == NULL)
-	// 	return TID_ERROR;
-	// strlcpy (fn_copy, file_name, PGSIZE);
-
-	// /* Parsed file name */
-	// char *save_ptr;
-	// file_name = strtok_r((char *) file_name, " ", &save_ptr);
-
 	char *fn_copy;
 	tid_t tid;
 
-	/* Make a copy of FILE_NAME for the child to parse arguments. */
-	fn_copy = palloc_get_page(0);
+	/* Make a copy of FILE_NAME.
+     Otherwise there's a race between the caller and load(). */
+	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy(fn_copy, file_name, PGSIZE);
+	strlcpy (fn_copy, file_name, PGSIZE);
 
-	/* Create a second temporary copy to extract the executable name. */
-	char *temp = malloc(strlen(file_name) + 1);
-	if (temp == NULL) {
-		palloc_free_page(fn_copy);
-		return TID_ERROR;
-	}
-	strlcpy(temp, file_name, PGSIZE);
+	/* Parsed file name */
 	char *save_ptr;
-	char *exec_name = strtok_r(temp, " ", &save_ptr);
+	file_name = strtok_r((char *) file_name, " ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);

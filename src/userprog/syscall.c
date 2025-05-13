@@ -67,7 +67,7 @@ void wait (Arguments *args){
 void create (Arguments *args){
   const char *file = (char*) args->arg1;
   validate_string(file);
-  unsigned initial_size = *(unsigned*) args->arg2;
+  unsigned initial_size = args->arg2;
   
   lock_acquire(&filesys_lock);
   *args->eax = filesys_create(file, initial_size);
@@ -102,7 +102,6 @@ void open (Arguments *args){
   opened_file->fd = current->next_fd++;
 
   list_push_back(&current->opened_files, &opened_file->elem);
-
   *args->eax = opened_file->fd;      /* return fd by assignning it to the eax */
 }
 
@@ -230,9 +229,9 @@ convert(int *address){
 
 void
 validate_string(char *str){
-  char *check_valid = (char *) SAFE(str);
+  char *check_valid = *(char *) SAFE(str);
   while(check_valid != 0){
-     check_valid = (char *) SAFE(++str);
+     check_valid = *(char *) SAFE(++str);
   }
 }
 

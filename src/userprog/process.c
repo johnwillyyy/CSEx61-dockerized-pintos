@@ -112,24 +112,37 @@ release_locks(struct list *held_locks) {
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
-{
-	char *fn_copy;
-	tid_t tid;
+process_execute(const char *cmd_line) {
+    char *fn_copy;
+    char *file_name;
+    tid_t tid;
 
-	/* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
-		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+    // Copy full command line
+    fn_copy = palloc_get_page(0);
+    if (fn_copy == NULL)
+        return TID_ERROR;
+    strlcpy(fn_copy, cmd_line, PGSIZE);
 
-	/* Parsed file name */
-	char *save_ptr;
-	file_name = strtok_r((char *) file_name, " ", &save_ptr);
+    // Parse just the program name from the copy
+    char *save_ptr;
+    file_name = strtok_r(fn_copy, " ", &save_ptr);
 
-	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+    // Make a second copy to pass into the thread (so we don't lose args)
+    char *thread_args = palloc_get_page(0);
+    if (thread_args == NULL) {
+        palloc_free_page(fn_copy);
+        return TID_ERROR;
+    }
+    strlcpy(thread_args, cmd_line, PGSIZE);
+
+    // Create child thread
+    tid = thread_create(file_name, PRI_DEFAULT, start_process, thread_args);
+
+    if (tid == TID_ERROR) {
+        palloc_free_page(fn_copy);
+        palloc_free_page(thread_args);
+        return TID_ERROR;
+    }
 	
 	struct child *child = get_child(&thread_current()->children, tid);
 	if(child != NULL){

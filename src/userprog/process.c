@@ -147,6 +147,9 @@ process_execute(const char *cmd_line) {
 	struct child *child = get_child(&thread_current()->children, tid);
 	if(child != NULL){
 		sema_down(&child->child_wait);
+		if (!child->load_success) {
+        	tid = TID_ERROR;
+    	}
 	}
 	else{
 		tid = TID_ERROR;
@@ -183,12 +186,12 @@ start_process (void *file_name_)
 
 	sema_up(&thread_current()->child_representation->child_wait);
 	if (!success){
+		thread_current()->child_representation->load_success = false;
 		thread_exit ();
 	}
 	else{
+		thread_current()->child_representation->load_success = true;
      	sema_down(&thread_current()->child_representation->parent_wait);
-		// if(thread_current()->child_representation->parent_exited == true)
-		// 	thread_current()->parent == NULL;
 	}
 
 	/* Start the user process by simulating a return from an

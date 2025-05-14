@@ -126,7 +126,7 @@ struct thread
       bool exited;
       bool waited_on;
       int exit_status;
-      // bool load_success;
+      bool load_success;
       bool parent_exited;
       struct semaphore child_wait;
       struct semaphore parent_wait;

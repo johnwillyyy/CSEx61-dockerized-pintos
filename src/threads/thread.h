@@ -94,7 +94,8 @@ struct thread
     int next_fd;
     
     struct list children;                 /* list of all children*/
-   //  struct thread *parent;                /* thread parent*/
+
+    struct list held_locks;
 
     struct child *child_representation;   /* this thread as a child to its parent*/
    

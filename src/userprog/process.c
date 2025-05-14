@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -46,7 +47,7 @@ remove_child(struct list *children, tid_t child_tid)
     for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
         struct child *c = list_entry(e, struct child, elem);
         if (c->tid == child_tid) {
-            list_remove(e);
+            list_remove(&c->elem);
             free(c);
             return;
         }
@@ -56,14 +57,55 @@ remove_child(struct list *children, tid_t child_tid)
 void
 wake_children(struct list *children) 
 {
-    struct list_elem *e;
-
-    for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
+    struct list_elem *e = list_begin(children);
+    while (e != list_end(children)) {
+        struct list_elem *next = list_next(e);
         struct child *c = list_entry(e, struct child, elem);
-		c->parent_exited = true;
+
+        c->parent_exited = true;
         sema_up(&c->parent_wait);
+
+        list_remove(&c->elem);
+        free(c);
+
+        e = next;
     }
 }
+
+
+void
+release_files(struct list *files) {
+    struct list_elem *e = list_begin(files);
+    while (e != list_end(files)) {
+        struct list_elem *next = list_next(e);
+        struct opened_file *file = list_entry(e, struct opened_file, elem);
+
+        lock_acquire(&filesys_lock);
+        file_close(file->file);
+        lock_release(&filesys_lock);
+
+        list_remove(&file->elem);
+        free(file);
+
+        e = next;
+    }
+}
+
+
+void
+release_locks(struct list *held_locks) {
+    struct list_elem *e = list_begin(held_locks);
+    while (e != list_end(held_locks)) {
+        struct list_elem *next = list_next(e);
+        struct lock *lock = list_entry(e, struct lock, elem);
+
+        lock_release(lock);
+
+        list_remove(&lock->elem);
+        e = next;
+    }
+}
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -165,7 +207,7 @@ process_wait (tid_t child_tid UNUSED)
 	if(!child->exited){
 		child->waited_on = true;
 		sema_up(&child->parent_wait);    /* child wake up*/
-		sema_down(&child->child_wait);  /* parent sleep*/
+		sema_down(&child->child_wait);   /* parent sleep*/
 	}
 
 	int status = child->exit_status;
@@ -182,7 +224,10 @@ process_exit (void)
 
   	if(cur->child_representation->waited_on && !thread_current()->child_representation->parent_exited)
     	sema_up(&cur->child_representation->child_wait);
+
 	wake_children(&cur->children);
+	// release_files(&cur->opened_files);
+	release_locks(&cur->held_locks);
 
 	/* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

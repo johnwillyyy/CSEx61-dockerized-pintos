@@ -16,6 +16,8 @@ typedef struct { uint32_t *eax; int arg1; int arg2; int arg3; } Arguments;
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
+struct lock filesys_lock;
+
 /* System Calls Definetions*/
 void halt (Arguments *args);
 void exit (Arguments *args);

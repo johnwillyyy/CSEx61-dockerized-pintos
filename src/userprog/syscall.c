@@ -9,8 +9,6 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 
-struct lock filesys_lock;
-
 static void syscall_handler (struct intr_frame *);
 void validate_string(char *str);
 void validate_buffer(void *buffer, unsigned size);
@@ -135,12 +133,14 @@ void read (Arguments *args){
   void *buffer = (void *) args->arg2;
   unsigned size = args->arg3;
   validate_buffer(buffer, size);
+  if(buffer == NULL){
+      *args->eax = ERROR;
+      return;
+  }
 
   if (fd == STDIN_FILENO) {
     for (unsigned i = 0; i < size; i++) {
-      lock_acquire(&filesys_lock);
       ((char *)buffer)[i] = input_getc();
-      lock_release(&filesys_lock);
     }
     *args->eax = size;
     return;
@@ -149,6 +149,7 @@ void read (Arguments *args){
     struct file *file = get_file(fd);
     if(file == NULL){
       *args->eax = ERROR;
+      return;
     }
     
     lock_acquire(&filesys_lock);
@@ -162,11 +163,13 @@ void write (Arguments *args){
   const void *buffer = (void *) args->arg2;
   unsigned size = args->arg3;
   validate_buffer(buffer, size);
+  if(buffer == NULL){
+      *args->eax = ERROR;
+      return;
+  }
 
   if (fd == STDOUT_FILENO) {
-    lock_acquire(&filesys_lock);
     putbuf(buffer, size);
-    lock_release(&filesys_lock);
     *args->eax = size;
     return;
   } 
@@ -186,6 +189,9 @@ void seek (Arguments *args){
   int fd = args->arg1;
   unsigned position = args->arg2;
   struct file *file = get_file(fd);
+  if(file == NULL){
+      return;
+  }
   
   lock_acquire(&filesys_lock);
   file_seek(file, position);
@@ -195,19 +201,42 @@ void seek (Arguments *args){
 void tell (Arguments *args){
   int fd = args->arg1;
   struct file *file = get_file(fd);
+  if(file == NULL){
+      *args->eax = ERROR;
+      return;
+  }
   
   lock_acquire(&filesys_lock);
   *args->eax = file_tell(file);
   lock_release(&filesys_lock);
 }
 
+void remove_file(int file_descriptor){
+	struct list_elem *e;
+
+	for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);e = list_next (e))
+	{
+    struct opened_file *curr = list_entry(e,struct opened_file,elem);
+    if(curr->fd == file_descriptor){
+      list_remove(&curr->elem);
+      free(curr);
+      return;
+    }
+  }
+}
+
 void close (Arguments *args){
   int fd = args->arg1;
   struct file *file = get_file(fd);
+  if(file == NULL){
+      *args->eax = ERROR;
+      return;
+  }
 
   lock_acquire(&filesys_lock);
   file_close(file);
   lock_release(&filesys_lock);
+  remove_file(fd);
 }
 
 int * 

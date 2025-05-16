@@ -97,6 +97,8 @@ struct thread
 
     struct list held_locks;
 
+    struct file *executed_file;
+
     struct child *child_representation;   /* this thread as a child to its parent*/
    
     struct list_elem allelem;           /* List element for all threads list. */

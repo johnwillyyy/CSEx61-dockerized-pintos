@@ -193,7 +193,7 @@ thread_create (const char *name, int priority,
 	sema_init(&t->child_representation->parent_wait, 0);
 	t->child_representation->exit_status = -1;
 	t->child_representation->exited = false;
-	// t->child_representation->load_success = false;
+	t->child_representation->load_success = false;
 	t->child_representation->waited_on = false;
 	t->child_representation->parent_exited = false;
 
@@ -492,7 +492,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->magic = THREAD_MAGIC;
 	list_init (&t->opened_files);
 	t->next_fd = 2;
-
+	t->executed_file = NULL;
 	list_init(&t->children);  
 	list_init(&t->held_locks);
 

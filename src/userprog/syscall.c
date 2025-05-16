@@ -46,7 +46,6 @@ void exit (Arguments *args){
   int status = args->arg1;  
   thread_current()->child_representation->exited = true;
   thread_current()->child_representation->exit_status = status;
-
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
 }

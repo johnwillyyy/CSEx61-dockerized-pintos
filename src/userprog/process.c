@@ -99,7 +99,9 @@ release_locks(struct list *held_locks) {
         struct list_elem *next = list_next(e);
         struct lock *lock = list_entry(e, struct lock, elem);
 
-        lock_release(lock);
+		if (lock_held_by_current_thread(lock)) {
+            lock_release(lock);
+        }
 
         list_remove(&lock->elem);
         e = next;
@@ -217,11 +219,12 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
 	struct child* child = get_child(&thread_current()->children, child_tid);
-	if(child == NULL)
+	if(child == NULL || child->waited_on)
 		return -1;
 	
+	child->waited_on = true;
+
 	if(!child->exited){
-		child->waited_on = true;
 		sema_up(&child->parent_wait);    /* child wake up*/
 		sema_down(&child->child_wait);   /* parent sleep*/
 	}
@@ -240,9 +243,13 @@ process_exit (void)
 
   	if(cur->child_representation->waited_on && !thread_current()->child_representation->parent_exited)
     	sema_up(&cur->child_representation->child_wait);
+	if(cur->executed_file != NULL){
+		file_allow_write(cur->executed_file);
+		cur->executed_file = NULL;
+	}
 
 	wake_children(&cur->children);
-	// release_files(&cur->opened_files);
+	release_files(&cur->opened_files);
 	release_locks(&cur->held_locks);
 
 	/* Destroy the current process's page directory and switch back
@@ -377,6 +384,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 		goto done;
 	}
 	file_deny_write(file);
+	t->executed_file = file;
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -461,7 +469,10 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 
 	done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	if(!success && file != NULL){
+		file_close (file);
+		t->executed_file = NULL;
+	}
 	return success;
 }
 

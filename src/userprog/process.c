@@ -157,8 +157,7 @@ process_execute(const char *cmd_line) {
 		tid = TID_ERROR;
 	}
 
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
+	palloc_free_page(fn_copy);
 
 	return tid;
 }
@@ -241,7 +240,8 @@ process_exit (void)
 	struct thread *cur = thread_current ();
 	uint32_t *pd;
 
-  	if(cur->child_representation->waited_on && !thread_current()->child_representation->parent_exited)
+	cur->child_representation->exited = true;
+  	if(cur->child_representation->waited_on && !cur->child_representation->parent_exited)
     	sema_up(&cur->child_representation->child_wait);
 	if(cur->executed_file != NULL){
 		file_allow_write(cur->executed_file);
